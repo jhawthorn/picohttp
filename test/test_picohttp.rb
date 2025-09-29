@@ -61,7 +61,7 @@ class TestPicohttp < Minitest::Test
 
   def test_parse_request_with_query_string
     request = "GET /path?foo=bar&baz=qux HTTP/1.1\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    method, path, version, _, _ = Picohttp.parse_request(request)
     assert_equal "GET", method
     assert_equal "/path?foo=bar&baz=qux", path
     assert_equal "1.1", version
@@ -69,7 +69,7 @@ class TestPicohttp < Minitest::Test
 
   def test_parse_request_with_fragment
     request = "GET /path#section HTTP/1.0\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    method, path, version, _, _ = Picohttp.parse_request(request)
     assert_equal "GET", method
     assert_equal "/path#section", path
     assert_equal "1.0", version
@@ -92,19 +92,19 @@ class TestPicohttp < Minitest::Test
 
   def test_parse_request_empty_header_value
     request = "GET / HTTP/1.1\r\nHost:\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    _, _, _, headers, _ = Picohttp.parse_request(request)
     assert_equal "", headers["Host"]
   end
 
   def test_parse_request_header_value_with_spaces
     request = "GET / HTTP/1.1\r\nHost: example.com \r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    _, _, _, headers, _ = Picohttp.parse_request(request)
     assert_equal "example.com", headers["Host"]
   end
 
   def test_parse_request_multiple_spaces_between_tokens
     request = "GET   /   HTTP/1.0\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    method, path, version, _, _ = Picohttp.parse_request(request)
     assert_equal "GET", method
     assert_equal "/", path
     assert_equal "1.0", version
@@ -113,7 +113,7 @@ class TestPicohttp < Minitest::Test
   def test_parse_request_all_methods
     %w[GET HEAD POST PUT DELETE CONNECT OPTIONS TRACE PATCH].each do |meth|
       request = "#{meth} / HTTP/1.0\r\n\r\n"
-      method, path, version, headers, offset = Picohttp.parse_request(request)
+      method, _, _, _, _ = Picohttp.parse_request(request)
       assert_equal meth, method
     end
   end
@@ -121,7 +121,7 @@ class TestPicohttp < Minitest::Test
   def test_parse_request_custom_method
     # Should accept any token as method
     request = "CUSTOM /path HTTP/1.1\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    method, path, _, _, _ = Picohttp.parse_request(request)
     assert_equal "CUSTOM", method
     assert_equal "/path", path
   end
@@ -129,7 +129,7 @@ class TestPicohttp < Minitest::Test
   def test_parse_request_http_versions
     %w[1.0 1.1].each do |ver|
       request = "GET / HTTP/#{ver}\r\n\r\n"
-      method, path, version, headers, offset = Picohttp.parse_request(request)
+      _, _, version, _, _ = Picohttp.parse_request(request)
       assert_equal ver, version
     end
   end
@@ -172,7 +172,7 @@ class TestPicohttp < Minitest::Test
   def test_parse_request_very_long_path
     long_path = "/" + "a" * 5000
     request = "GET #{long_path} HTTP/1.0\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    method, path, _, _, _ = Picohttp.parse_request(request)
     assert_equal "GET", method
     assert_equal long_path, path
   end
@@ -180,7 +180,7 @@ class TestPicohttp < Minitest::Test
   def test_parse_request_many_headers
     headers_str = 50.times.map { |i| "Header#{i}: value#{i}\r\n" }.join
     request = "GET / HTTP/1.1\r\n#{headers_str}\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    method, _, _, headers, _ = Picohttp.parse_request(request)
     assert_equal "GET", method
     assert_equal 50, headers.size
     50.times do |i|
@@ -191,13 +191,13 @@ class TestPicohttp < Minitest::Test
   def test_parse_request_duplicate_headers
     # When same header appears multiple times, last one wins
     request = "GET / HTTP/1.0\r\nHost: first.com\r\nHost: second.com\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    _, _, _, headers, _ = Picohttp.parse_request(request)
     assert_equal "second.com", headers["Host"]
   end
 
   def test_parse_request_case_sensitive_headers
     request = "GET / HTTP/1.0\r\nHost: example.com\r\nhost: other.com\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    _, _, _, headers, _ = Picohttp.parse_request(request)
     # Headers are case-sensitive as returned
     assert_equal "example.com", headers["Host"]
     assert_equal "other.com", headers["host"]
@@ -205,7 +205,7 @@ class TestPicohttp < Minitest::Test
 
   def test_parse_request_with_body
     request = "POST / HTTP/1.1\r\nContent-Length: 13\r\n\r\n{\"test\":true}"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    method, path, _, _, offset = Picohttp.parse_request(request)
     assert_equal "POST", method
     assert_equal "/", path
     # offset should point to start of body
@@ -223,19 +223,19 @@ class TestPicohttp < Minitest::Test
 
   def test_parse_request_header_without_space_after_colon
     request = "GET / HTTP/1.0\r\nHost:example.com\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    _, _, _, headers, _ = Picohttp.parse_request(request)
     assert_equal "example.com", headers["Host"]
   end
 
   def test_parse_request_tab_in_header_value
     request = "GET / HTTP/1.0\r\nHost:\texample.com\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    _, _, _, headers, _ = Picohttp.parse_request(request)
     assert_equal "example.com", headers["Host"]
   end
 
   def test_parse_request_absolute_uri
     request = "GET http://example.com/path HTTP/1.1\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    method, path, version, _, _ = Picohttp.parse_request(request)
     assert_equal "GET", method
     assert_equal "http://example.com/path", path
     assert_equal "1.1", version
@@ -243,7 +243,7 @@ class TestPicohttp < Minitest::Test
 
   def test_parse_request_asterisk_form
     request = "OPTIONS * HTTP/1.1\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    method, path, version, _, _ = Picohttp.parse_request(request)
     assert_equal "OPTIONS", method
     assert_equal "*", path
     assert_equal "1.1", version
@@ -251,7 +251,7 @@ class TestPicohttp < Minitest::Test
 
   def test_parse_request_multibyte_characters
     request = "GET /hoge HTTP/1.1\r\nUser-Agent: \343\201\262\343/1.0\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    method, path, _, headers, _ = Picohttp.parse_request(request)
     assert_equal "GET", method
     assert_equal "/hoge", path
     assert_equal "\xE3\x81\xB2\xE3/1.0".b, headers["User-Agent"]
@@ -259,7 +259,7 @@ class TestPicohttp < Minitest::Test
 
   def test_parse_request_chunked_encoding
     request = "POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n"
-    method, path, version, headers, offset = Picohttp.parse_request(request)
+    method, _, _, headers, offset = Picohttp.parse_request(request)
     assert_equal "POST", method
     assert_equal "chunked", headers["Transfer-Encoding"]
     # Body parsing would start at offset

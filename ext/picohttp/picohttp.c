@@ -2,6 +2,7 @@
 #include "picohttpparser.h"
 
 VALUE rb_mPicohttp;
+VALUE rb_ePicohttpParseError;
 
 static VALUE
 picohttp_parse_request(VALUE self, VALUE str)
@@ -23,11 +24,14 @@ picohttp_parse_request(VALUE self, VALUE str)
         if (result == -2) {
             return Qnil; // Incomplete request
         }
-        rb_raise(rb_eArgError, "Failed to parse HTTP request");
+        rb_raise(rb_ePicohttpParseError, "Invalid HTTP request");
     }
 
     VALUE headers_hash = rb_hash_new();
     for (size_t i = 0; i < num_headers; i++) {
+        if (headers[i].name == NULL) {
+            rb_raise(rb_ePicohttpParseError, "HTTP line folding not supported");
+        }
         VALUE key = rb_str_new(headers[i].name, headers[i].name_len);
         VALUE val = rb_str_new(headers[i].value, headers[i].value_len);
         rb_hash_aset(headers_hash, key, val);
@@ -45,5 +49,6 @@ RUBY_FUNC_EXPORTED void
 Init_picohttp(void)
 {
     rb_mPicohttp = rb_define_module("Picohttp");
+    rb_ePicohttpParseError = rb_define_class_under(rb_mPicohttp, "ParseError", rb_eStandardError);
     rb_define_module_function(rb_mPicohttp, "parse_request", picohttp_parse_request, 1);
 }

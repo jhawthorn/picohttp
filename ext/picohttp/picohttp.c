@@ -5,6 +5,27 @@ VALUE rb_mPicohttp;
 VALUE rb_ePicohttpParseError;
 
 static VALUE
+header_name_to_env_key(const char *name, size_t name_len)
+{
+    char env_name[256];
+    strcpy(env_name, "HTTP_");
+
+    for (size_t j = 0; j < name_len && j < 250; j++) {
+        char c = name[j];
+        if (c == '-') {
+            env_name[5 + j] = '_';
+        } else if (c >= 'a' && c <= 'z') {
+            env_name[5 + j] = c - 'a' + 'A';
+        } else {
+            env_name[5 + j] = c;
+        }
+    }
+    env_name[5 + name_len] = '\0';
+
+    return rb_str_new_cstr(env_name);
+}
+
+static VALUE
 picohttp_parse_request(VALUE self, VALUE str)
 {
     Check_Type(str, T_STRING);
@@ -45,10 +66,66 @@ picohttp_parse_request(VALUE self, VALUE str)
         INT2FIX(result));
 }
 
+static VALUE
+picohttp_parse_request_env(VALUE self, VALUE str)
+{
+    Check_Type(str, T_STRING);
+
+    const char *buf = RSTRING_PTR(str);
+    size_t len = RSTRING_LEN(str);
+
+    const char *method, *path;
+    int minor_version;
+    struct phr_header headers[100];
+    size_t method_len, path_len, num_headers = sizeof(headers) / sizeof(headers[0]);
+
+    int result = phr_parse_request(buf, len, &method, &method_len, &path, &path_len,
+                                   &minor_version, headers, &num_headers, 0);
+
+    if (result < 0) {
+        if (result == -2) {
+            return Qnil; // Incomplete request
+        }
+        rb_raise(rb_ePicohttpParseError, "Invalid HTTP request");
+    }
+
+    VALUE env = rb_hash_new();
+
+    // Standard CGI/Rack environment variables
+    rb_hash_aset(env, rb_str_new_cstr("REQUEST_METHOD"), rb_str_new(method, method_len));
+    rb_hash_aset(env, rb_str_new_cstr("SERVER_PROTOCOL"), rb_sprintf("HTTP/1.%d", minor_version));
+
+    // Parse path and query string in C
+    const char *query_start = memchr(path, '?', path_len);
+    if (query_start) {
+        size_t path_info_len = query_start - path;
+        size_t query_len = path_len - path_info_len - 1;
+        rb_hash_aset(env, rb_str_new_cstr("PATH_INFO"), rb_str_new(path, path_info_len));
+        rb_hash_aset(env, rb_str_new_cstr("QUERY_STRING"), rb_str_new(query_start + 1, query_len));
+    } else {
+        rb_hash_aset(env, rb_str_new_cstr("PATH_INFO"), rb_str_new(path, path_len));
+        rb_hash_aset(env, rb_str_new_cstr("QUERY_STRING"), rb_str_new_cstr(""));
+    }
+
+    // Convert headers to HTTP_ prefixed environment variables
+    for (size_t i = 0; i < num_headers; i++) {
+        if (headers[i].name == NULL) {
+            rb_raise(rb_ePicohttpParseError, "HTTP line folding not supported");
+        }
+
+        VALUE header_name = header_name_to_env_key(headers[i].name, headers[i].name_len);
+        VALUE header_value = rb_str_new(headers[i].value, headers[i].value_len);
+        rb_hash_aset(env, header_name, header_value);
+    }
+
+    return env;
+}
+
 RUBY_FUNC_EXPORTED void
 Init_picohttp(void)
 {
     rb_mPicohttp = rb_define_module("Picohttp");
     rb_ePicohttpParseError = rb_define_class_under(rb_mPicohttp, "ParseError", rb_eStandardError);
     rb_define_module_function(rb_mPicohttp, "parse_request", picohttp_parse_request, 1);
+    rb_define_module_function(rb_mPicohttp, "parse_request_env", picohttp_parse_request_env, 1);
 }

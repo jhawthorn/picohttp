@@ -129,4 +129,15 @@ class TestPicohttpEnv < Minitest::Test
     end
     assert_equal "Header name too long", error.message
   end
+
+  def test_parse_request_env_too_many_headers
+    # Generate 150 headers (more than the 100 limit in picohttpparser)
+    headers_str = 150.times.map { |i| "Header#{i}: value#{i}\r\n" }.join
+    request = "GET / HTTP/1.1\r\n#{headers_str}\r\n"
+
+    error = assert_raises(Picohttp::ParseError) do
+      Picohttp.parse_request_env(request)
+    end
+    assert_equal "Invalid HTTP request", error.message
+  end
 end

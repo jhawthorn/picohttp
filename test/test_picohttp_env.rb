@@ -119,4 +119,14 @@ class TestPicohttpEnv < Minitest::Test
     assert_equal "value with spaces", env["HTTP_X_TEST_123"]
     assert_equal "underscore", env["HTTP_X_UNDER_SCORE"]
   end
+
+  def test_parse_request_env_very_long_header_name
+    long_header_name = "X-" + "A" * 300  # 302 character header name
+    request = "GET / HTTP/1.1\r\n#{long_header_name}: test\r\n\r\n"
+
+    error = assert_raises(Picohttp::ParseError) do
+      Picohttp.parse_request_env(request)
+    end
+    assert_equal "Header name too long", error.message
+  end
 end

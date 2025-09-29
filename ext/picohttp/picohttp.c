@@ -1,6 +1,8 @@
 #include "picohttp.h"
 #include "picohttpparser.h"
 
+#define MAX_HEADER_NAME_LEN 256
+
 VALUE rb_mPicohttp;
 VALUE rb_ePicohttpParseError;
 
@@ -14,10 +16,14 @@ static VALUE rb_str_empty;
 static VALUE
 header_name_to_env_key(const char *name, size_t name_len)
 {
-    char env_name[256];
+    if (name_len > MAX_HEADER_NAME_LEN) {
+        rb_raise(rb_ePicohttpParseError, "Header name too long");
+    }
+
+    char env_name[MAX_HEADER_NAME_LEN + 6]; // "HTTP_" + name + null terminator
     strcpy(env_name, "HTTP_");
 
-    for (size_t j = 0; j < name_len && j < 250; j++) {
+    for (size_t j = 0; j < name_len; j++) {
         char c = name[j];
         if (c == '-') {
             env_name[5 + j] = '_';
@@ -29,7 +35,7 @@ header_name_to_env_key(const char *name, size_t name_len)
     }
     env_name[5 + name_len] = '\0';
 
-    return rb_interned_str(env_name, strlen(env_name));
+    return rb_interned_str(env_name, 5 + name_len);
 }
 
 static VALUE

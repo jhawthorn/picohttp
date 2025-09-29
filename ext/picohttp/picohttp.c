@@ -2,6 +2,7 @@
 #include "picohttpparser.h"
 
 #define MAX_HEADER_NAME_LEN 256
+#define ENV_HASH_INITIAL_CAPACITY 64
 
 VALUE rb_mPicohttp;
 VALUE rb_ePicohttpParseError;
@@ -12,6 +13,20 @@ static VALUE rb_str_server_protocol;
 static VALUE rb_str_path_info;
 static VALUE rb_str_query_string;
 static VALUE rb_str_empty;
+static VALUE rb_str_http_1_0;
+static VALUE rb_str_http_1_1;
+
+static VALUE
+http_version_string(int minor_version)
+{
+    if (minor_version == 0) {
+        return rb_str_http_1_0;
+    } else if (minor_version == 1) {
+        return rb_str_http_1_1;
+    } else {
+        return rb_sprintf("HTTP/1.%d", minor_version);
+    }
+}
 
 static VALUE
 header_name_to_env_key(const char *name, size_t name_len)
@@ -110,11 +125,15 @@ picohttp_parse_request_env(VALUE self, VALUE str)
         rb_raise(rb_ePicohttpParseError, "Invalid HTTP request");
     }
 
+#ifdef HAVE_RB_HASH_NEW_CAPA
+    VALUE env = rb_hash_new_capa(ENV_HASH_INITIAL_CAPACITY);
+#else
     VALUE env = rb_hash_new();
+#endif
 
     // Standard CGI/Rack environment variables
     rb_hash_aset(env, rb_str_request_method, rb_str_new(method, method_len));
-    rb_hash_aset(env, rb_str_server_protocol, rb_sprintf("HTTP/1.%d", minor_version));
+    rb_hash_aset(env, rb_str_server_protocol, http_version_string(minor_version));
 
     // Parse path and query string in C
     const char *query_start = memchr(path, '?', path_len);
@@ -160,6 +179,8 @@ Init_picohttp(void)
     rb_str_path_info = rb_interned_str_cstr("PATH_INFO");
     rb_str_query_string = rb_interned_str_cstr("QUERY_STRING");
     rb_str_empty = rb_interned_str_cstr("");
+    rb_str_http_1_0 = rb_interned_str_cstr("HTTP/1.0");
+    rb_str_http_1_1 = rb_interned_str_cstr("HTTP/1.1");
 
     // Prevent garbage collection of constants
     rb_gc_register_address(&rb_str_request_method);
@@ -167,4 +188,6 @@ Init_picohttp(void)
     rb_gc_register_address(&rb_str_path_info);
     rb_gc_register_address(&rb_str_query_string);
     rb_gc_register_address(&rb_str_empty);
+    rb_gc_register_address(&rb_str_http_1_0);
+    rb_gc_register_address(&rb_str_http_1_1);
 }

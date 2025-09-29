@@ -10,4 +10,7 @@ append_cflags("-fvisibility=hidden")
 # Check for Ractor support
 have_func("rb_ext_ractor_safe", "ruby.h")
 
+# Check for rb_hash_new_capa (Ruby 3.2+)
+have_func("rb_hash_new_capa", "ruby.h")
+
 create_makefile("picohttp/picohttp")

@@ -7,4 +7,7 @@ require "mkmf"
 # selectively, or entirely remove this flag.
 append_cflags("-fvisibility=hidden")
 
+# Check for Ractor support
+have_func("rb_ext_ractor_safe", "ruby.h")
+
 create_makefile("picohttp/picohttp")

@@ -137,6 +137,10 @@ picohttp_parse_request_env(VALUE self, VALUE str)
 RUBY_FUNC_EXPORTED void
 Init_picohttp(void)
 {
+#ifdef HAVE_RB_EXT_RACTOR_SAFE
+    rb_ext_ractor_safe(true);
+#endif
+
     rb_mPicohttp = rb_define_module("Picohttp");
     rb_ePicohttpParseError = rb_define_class_under(rb_mPicohttp, "ParseError", rb_eStandardError);
     rb_define_module_function(rb_mPicohttp, "parse_request", picohttp_parse_request, 1);

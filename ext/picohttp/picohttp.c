@@ -20,6 +20,14 @@ header_name_to_env_key(const char *name, size_t name_len)
         rb_raise(rb_ePicohttpParseError, "Header name too long");
     }
 
+    // Special cases for Content-Type and Content-Length (no HTTP_ prefix)
+    if (name_len == 12 && strncasecmp(name, "content-type", 12) == 0) {
+        return rb_interned_str_cstr("CONTENT_TYPE");
+    }
+    if (name_len == 14 && strncasecmp(name, "content-length", 14) == 0) {
+        return rb_interned_str_cstr("CONTENT_LENGTH");
+    }
+
     char env_name[MAX_HEADER_NAME_LEN + 6]; // "HTTP_" + name + null terminator
     strcpy(env_name, "HTTP_");
 

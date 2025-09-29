@@ -31,7 +31,7 @@ class TestPicohttpEnv < Minitest::Test
 
     assert_equal "POST", env["REQUEST_METHOD"]
     assert_equal "/api", env["PATH_INFO"]
-    assert_equal "application/json", env["HTTP_CONTENT_TYPE"]
+    assert_equal "application/json", env["CONTENT_TYPE"]
     assert_equal "test", env["HTTP_X_CUSTOM_HEADER"]
     assert_equal "gzip", env["HTTP_ACCEPT_ENCODING"]
   end
@@ -51,7 +51,7 @@ class TestPicohttpEnv < Minitest::Test
     assert_equal "api.example.com", env["HTTP_HOST"]
     assert_equal "MyApp/1.0", env["HTTP_USER_AGENT"]
     assert_equal "Bearer token123", env["HTTP_AUTHORIZATION"]
-    assert_equal "25", env["HTTP_CONTENT_LENGTH"]
+    assert_equal "25", env["CONTENT_LENGTH"]
   end
 
   def test_parse_request_env_no_query_string

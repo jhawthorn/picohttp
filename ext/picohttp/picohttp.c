@@ -4,6 +4,13 @@
 VALUE rb_mPicohttp;
 VALUE rb_ePicohttpParseError;
 
+// Frozen string constants
+static VALUE rb_str_request_method;
+static VALUE rb_str_server_protocol;
+static VALUE rb_str_path_info;
+static VALUE rb_str_query_string;
+static VALUE rb_str_empty;
+
 static VALUE
 header_name_to_env_key(const char *name, size_t name_len)
 {
@@ -22,7 +29,7 @@ header_name_to_env_key(const char *name, size_t name_len)
     }
     env_name[5 + name_len] = '\0';
 
-    return rb_str_new_cstr(env_name);
+    return rb_interned_str(env_name, strlen(env_name));
 }
 
 static VALUE
@@ -92,19 +99,19 @@ picohttp_parse_request_env(VALUE self, VALUE str)
     VALUE env = rb_hash_new();
 
     // Standard CGI/Rack environment variables
-    rb_hash_aset(env, rb_str_new_cstr("REQUEST_METHOD"), rb_str_new(method, method_len));
-    rb_hash_aset(env, rb_str_new_cstr("SERVER_PROTOCOL"), rb_sprintf("HTTP/1.%d", minor_version));
+    rb_hash_aset(env, rb_str_request_method, rb_str_new(method, method_len));
+    rb_hash_aset(env, rb_str_server_protocol, rb_sprintf("HTTP/1.%d", minor_version));
 
     // Parse path and query string in C
     const char *query_start = memchr(path, '?', path_len);
     if (query_start) {
         size_t path_info_len = query_start - path;
         size_t query_len = path_len - path_info_len - 1;
-        rb_hash_aset(env, rb_str_new_cstr("PATH_INFO"), rb_str_new(path, path_info_len));
-        rb_hash_aset(env, rb_str_new_cstr("QUERY_STRING"), rb_str_new(query_start + 1, query_len));
+        rb_hash_aset(env, rb_str_path_info, rb_str_new(path, path_info_len));
+        rb_hash_aset(env, rb_str_query_string, rb_str_new(query_start + 1, query_len));
     } else {
-        rb_hash_aset(env, rb_str_new_cstr("PATH_INFO"), rb_str_new(path, path_len));
-        rb_hash_aset(env, rb_str_new_cstr("QUERY_STRING"), rb_str_new_cstr(""));
+        rb_hash_aset(env, rb_str_path_info, rb_str_new(path, path_len));
+        rb_hash_aset(env, rb_str_query_string, rb_str_empty);
     }
 
     // Convert headers to HTTP_ prefixed environment variables
@@ -128,4 +135,18 @@ Init_picohttp(void)
     rb_ePicohttpParseError = rb_define_class_under(rb_mPicohttp, "ParseError", rb_eStandardError);
     rb_define_module_function(rb_mPicohttp, "parse_request", picohttp_parse_request, 1);
     rb_define_module_function(rb_mPicohttp, "parse_request_env", picohttp_parse_request_env, 1);
+
+    // Initialize interned string constants
+    rb_str_request_method = rb_interned_str_cstr("REQUEST_METHOD");
+    rb_str_server_protocol = rb_interned_str_cstr("SERVER_PROTOCOL");
+    rb_str_path_info = rb_interned_str_cstr("PATH_INFO");
+    rb_str_query_string = rb_interned_str_cstr("QUERY_STRING");
+    rb_str_empty = rb_interned_str_cstr("");
+
+    // Prevent garbage collection of constants
+    rb_gc_register_address(&rb_str_request_method);
+    rb_gc_register_address(&rb_str_server_protocol);
+    rb_gc_register_address(&rb_str_path_info);
+    rb_gc_register_address(&rb_str_query_string);
+    rb_gc_register_address(&rb_str_empty);
 }

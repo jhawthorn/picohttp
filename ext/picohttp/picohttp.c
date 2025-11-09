@@ -16,6 +16,8 @@ static VALUE rb_str_empty;
 static VALUE rb_str_http_1_0;
 static VALUE rb_str_http_1_1;
 
+#include "string_lookup.inc"
+
 static VALUE
 http_version_string(int minor_version)
 {
@@ -35,12 +37,9 @@ header_name_to_env_key(const char *name, size_t name_len)
         rb_raise(rb_ePicohttpParseError, "Header name too long");
     }
 
-    // Special cases for Content-Type and Content-Length (no HTTP_ prefix)
-    if (name_len == 12 && strncasecmp(name, "content-type", 12) == 0) {
-        return rb_interned_str_cstr("CONTENT_TYPE");
-    }
-    if (name_len == 14 && strncasecmp(name, "content-length", 14) == 0) {
-        return rb_interned_str_cstr("CONTENT_LENGTH");
+    VALUE str = lookup_header(name, name_len);
+    if (str != Qnil) {
+        return str;
     }
 
     char env_name[MAX_HEADER_NAME_LEN + 6]; // "HTTP_" + name + null terminator
@@ -174,6 +173,7 @@ Init_picohttp(void)
     rb_define_module_function(rb_mPicohttp, "parse_request_env", picohttp_parse_request_env, 1);
 
     // Initialize interned string constants
+    init_string_lookup();
     rb_str_request_method = rb_interned_str_cstr("REQUEST_METHOD");
     rb_str_server_protocol = rb_interned_str_cstr("SERVER_PROTOCOL");
     rb_str_path_info = rb_interned_str_cstr("PATH_INFO");

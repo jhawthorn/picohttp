@@ -2,7 +2,7 @@
 #include "picohttpparser.h"
 
 #define MAX_HEADER_NAME_LEN 256
-#define ENV_HASH_INITIAL_CAPACITY 64
+#define MAX_HEADERS 100
 
 VALUE rb_mPicohttp;
 VALUE rb_ePicohttpParseError;
@@ -78,7 +78,7 @@ picohttp_parse_request(VALUE self, VALUE str)
 
     const char *method, *path;
     int minor_version;
-    struct phr_header headers[100];
+    struct phr_header headers[MAX_HEADERS];
     size_t method_len, path_len, num_headers = sizeof(headers) / sizeof(headers[0]);
 
     int result = phr_parse_request(buf, len, &method, &method_len, &path, &path_len,
@@ -119,7 +119,7 @@ picohttp_parse_request_env(VALUE self, VALUE str)
 
     const char *method, *path;
     int minor_version;
-    struct phr_header headers[100];
+    struct phr_header headers[MAX_HEADERS];
     size_t method_len, path_len, num_headers = sizeof(headers) / sizeof(headers[0]);
 
     int result = phr_parse_request(buf, len, &method, &method_len, &path, &path_len,
@@ -132,26 +132,33 @@ picohttp_parse_request_env(VALUE self, VALUE str)
         rb_raise(rb_ePicohttpParseError, "Invalid HTTP request");
     }
 
-#ifdef HAVE_RB_HASH_NEW_CAPA
-    VALUE env = rb_hash_new_capa(ENV_HASH_INITIAL_CAPACITY);
-#else
-    VALUE env = rb_hash_new();
-#endif
+    VALUE header_values[MAX_HEADERS * 2];
+    int idx = 0;
 
     // Standard CGI/Rack environment variables
-    rb_hash_aset(env, rb_str_request_method, http_method_string(method, method_len));
-    rb_hash_aset(env, rb_str_server_protocol, http_version_string(minor_version));
+    header_values[idx++] = rb_str_request_method;
+    header_values[idx++] = http_method_string(method, method_len);
+
+    header_values[idx++] = rb_str_server_protocol;
+    header_values[idx++] = http_version_string(minor_version);
 
     // Parse path and query string in C
     const char *query_start = memchr(path, '?', path_len);
     if (query_start) {
         size_t path_info_len = query_start - path;
         size_t query_len = path_len - path_info_len - 1;
-        rb_hash_aset(env, rb_str_path_info, rb_str_new(path, path_info_len));
-        rb_hash_aset(env, rb_str_query_string, rb_str_new(query_start + 1, query_len));
+
+        header_values[idx++] = rb_str_path_info;
+        header_values[idx++] = rb_str_new(path, path_info_len);
+
+        header_values[idx++] = rb_str_query_string;
+        header_values[idx++] = rb_str_new(query_start + 1, query_len);
     } else {
-        rb_hash_aset(env, rb_str_path_info, rb_str_new(path, path_len));
-        rb_hash_aset(env, rb_str_query_string, rb_str_empty);
+        header_values[idx++] = rb_str_path_info;
+        header_values[idx++] = rb_str_new(path, path_len);
+
+        header_values[idx++] = rb_str_query_string;
+        header_values[idx++] = rb_str_empty;
     }
 
     // Convert headers to HTTP_ prefixed environment variables
@@ -160,10 +167,17 @@ picohttp_parse_request_env(VALUE self, VALUE str)
             rb_raise(rb_ePicohttpParseError, "HTTP line folding not supported");
         }
 
-        VALUE header_name = header_name_to_env_key(headers[i].name, headers[i].name_len);
-        VALUE header_value = rb_str_new(headers[i].value, headers[i].value_len);
-        rb_hash_aset(env, header_name, header_value);
+        header_values[idx++] = header_name_to_env_key(headers[i].name, headers[i].name_len);
+        header_values[idx++] = rb_str_new(headers[i].value, headers[i].value_len);
     }
+
+#ifdef HAVE_RB_HASH_NEW_CAPA
+    VALUE env = rb_hash_new_capa(idx / 2);
+#else
+    VALUE env = rb_hash_new();
+#endif
+
+    rb_hash_bulk_insert(idx, header_values, env);
 
     return env;
 }

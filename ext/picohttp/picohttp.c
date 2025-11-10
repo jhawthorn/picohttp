@@ -31,6 +31,14 @@ http_version_string(int minor_version)
 }
 
 static VALUE
+http_method_string(const char *method, size_t method_len)
+{
+    VALUE str = lookup_method(method, method_len);
+    if (str == Qnil) str = rb_str_new(method, method_len);
+    return str;
+}
+
+static VALUE
 header_name_to_env_key(const char *name, size_t name_len)
 {
     if (name_len > MAX_HEADER_NAME_LEN) {
@@ -131,7 +139,7 @@ picohttp_parse_request_env(VALUE self, VALUE str)
 #endif
 
     // Standard CGI/Rack environment variables
-    rb_hash_aset(env, rb_str_request_method, rb_str_new(method, method_len));
+    rb_hash_aset(env, rb_str_request_method, http_method_string(method, method_len));
     rb_hash_aset(env, rb_str_server_protocol, http_version_string(minor_version));
 
     // Parse path and query string in C

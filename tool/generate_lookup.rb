@@ -15,9 +15,12 @@ class StringLookup
   end
 
   def generate
+    # Generate the struct to hold all strings
+    puts "static struct string_lookup_t {"
     @string_table.each do |v, name|
-      puts "static VALUE #{name}; /* #{v.inspect} */"
+      puts "  VALUE #{name}; /* #{v.inspect} */"
     end
+    puts "} string_lookup;"
     puts
 
     @functions.each do |code|
@@ -25,17 +28,54 @@ class StringLookup
       puts
     end
 
-    puts "static void init_string_lookup(void) {"
+    # Generate mark function
+    puts "static void string_lookup_mark(void *ptr) {"
+    puts "  struct string_lookup_t *s = ptr;"
     @string_table.each do |v, name|
-      puts "  rb_gc_register_address(&#{name});"
-      puts "  #{name} = rb_interned_str_cstr(#{v.dump});"
+      puts "  rb_gc_mark_movable(s->#{name});"
+    end
+    puts "}"
+    puts
+
+    # Generate compact function
+    puts "static void string_lookup_compact(void *ptr) {"
+    puts "  struct string_lookup_t *s = ptr;"
+    @string_table.each do |v, name|
+      puts "  s->#{name} = rb_gc_location(s->#{name});"
+    end
+    puts "}"
+    puts
+
+    # Generate TypedData type
+    puts "static const rb_data_type_t string_lookup_type = {"
+    puts "  .wrap_struct_name = \"picohttp_string_lookup\","
+    puts "  .function = {"
+    puts "    .dmark = string_lookup_mark,"
+    puts "    .dfree = NULL,"
+    puts "    .dsize = NULL,"
+    puts "    .dcompact = string_lookup_compact,"
+    puts "  },"
+    puts "  .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED,"
+    puts "};"
+    puts
+
+    puts "static void intern_str(VALUE wrapper, VALUE *field, const char *str) {"
+    puts "  RB_OBJ_WRITE(wrapper, field, rb_interned_str_cstr(str));"
+    puts "}"
+    puts
+
+    puts "static void init_string_lookup(void) {"
+    puts "  VALUE wrapper = TypedData_Wrap_Struct(0, &string_lookup_type, &string_lookup);"
+    puts "  rb_gc_register_mark_object(wrapper);"
+    @string_table.each do |v, name|
+      puts "  intern_str(wrapper, &string_lookup.#{name}, #{v.dump});"
     end
     puts "}"
     puts
   end
 
   def name_for_string(string)
-    "rb_s_#{string.gsub(/[^a-z0-9]/i, "_")}"
+    string.gsub(/[^a-z0-9]/i, "_").downcase
   end
 
   def generate_comparison(var, string, ignore_case: false)
@@ -66,7 +106,7 @@ class StringLookup
       code << "  case #{len}:"
       strs.each do |match, target|
         name = @string_table[target]
-        code << "    if (#{generate_comparison("s", match, ignore_case:)}) return #{name};"
+        code << "    if (#{generate_comparison("s", match, ignore_case:)}) return string_lookup.#{name};"
       end
       code << "    break;"
     end

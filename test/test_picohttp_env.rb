@@ -140,4 +140,25 @@ class TestPicohttpEnv < Minitest::Test
     end
     assert_equal "Invalid HTTP request", error.message
   end
+
+  def test_parse_request_env_header_count_range
+    (0..200).each do |num_headers|
+      headers_str = "Host: localhost:3000\r\n"
+      headers_str += num_headers.times.map { |i| "X-Header-#{i}: value#{i}\r\n" }.join
+      request = "GET / HTTP/1.1\r\n#{headers_str}\r\n"
+
+      if num_headers < 100
+        env = Picohttp.parse_request_env(request)
+        assert env
+        assert_equal "GET", env["REQUEST_METHOD"]
+        assert_equal "/", env["PATH_INFO"]
+        assert_equal "localhost:3000", env["HTTP_HOST"]
+        assert_equal num_headers + 1 + 8, env.size
+      else
+        assert_raises(Picohttp::ParseError) do
+          Picohttp.parse_request_env(request)
+        end
+      end
+    end
+  end
 end

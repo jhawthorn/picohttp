@@ -265,4 +265,26 @@ class TestPicohttp < Minitest::Test
     # Body parsing would start at offset
     assert_equal request.index("\r\n\r\n") + 4, offset
   end
+
+  def test_parse_request_header_count_range
+    (0..200).each do |num_headers|
+      headers_str = "Host: localhost:3000\r\n"
+      headers_str += num_headers.times.map { |i| "X-Header-#{i}: value#{i}\r\n" }.join
+      request = "GET / HTTP/1.1\r\n#{headers_str}\r\n"
+
+      if num_headers < 100
+        result = Picohttp.parse_request(request)
+        assert result
+        method, path, version, headers, _offset = result
+        assert_equal "GET", method
+        assert_equal "/", path
+        assert_equal "1.1", version
+        assert_equal num_headers + 1, headers.size
+      else
+        assert_raises(Picohttp::ParseError) do
+          Picohttp.parse_request(request)
+        end
+      end
+    end
+  end
 end

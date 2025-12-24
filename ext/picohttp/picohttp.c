@@ -2,7 +2,8 @@
 #include "picohttpparser.h"
 
 #define MAX_HEADER_NAME_LEN 256
-#define MAX_HEADERS 100
+#define MAX_HTTP_HEADERS 100
+#define EXTRA_RACK_HEADERS 8
 
 VALUE rb_mPicohttp;
 VALUE rb_ePicohttpParseError;
@@ -82,7 +83,7 @@ picohttp_parse_request(VALUE self, VALUE str)
 
     const char *method, *path;
     int minor_version;
-    struct phr_header headers[MAX_HEADERS];
+    struct phr_header headers[MAX_HTTP_HEADERS];
     size_t method_len, path_len, num_headers = sizeof(headers) / sizeof(headers[0]);
 
     int result = phr_parse_request(buf, len, &method, &method_len, &path, &path_len,
@@ -123,7 +124,7 @@ picohttp_parse_request_env(VALUE self, VALUE str)
 
     const char *method, *path;
     int minor_version;
-    struct phr_header headers[MAX_HEADERS];
+    struct phr_header headers[MAX_HTTP_HEADERS];
     size_t method_len, path_len, num_headers = sizeof(headers) / sizeof(headers[0]);
 
     int result = phr_parse_request(buf, len, &method, &method_len, &path, &path_len,
@@ -136,7 +137,7 @@ picohttp_parse_request_env(VALUE self, VALUE str)
         rb_raise(rb_ePicohttpParseError, "Invalid HTTP request");
     }
 
-    VALUE header_values[MAX_HEADERS * 2];
+    VALUE header_values[(MAX_HTTP_HEADERS + EXTRA_RACK_HEADERS) * 2];
     int idx = 0;
 
     // Standard CGI/Rack environment variables

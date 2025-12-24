@@ -216,6 +216,14 @@ picohttp_parse_request_env(VALUE self, VALUE str)
     return env;
 }
 
+static VALUE
+register_interned_string(const char *str)
+{
+    VALUE val = rb_interned_str_cstr(str);
+    rb_gc_register_mark_object(val);
+    return val;
+}
+
 RUBY_FUNC_EXPORTED void
 Init_picohttp(void)
 {
@@ -230,28 +238,16 @@ Init_picohttp(void)
 
     // Initialize interned string constants
     init_string_lookup();
-    rb_str_request_method = rb_interned_str_cstr("REQUEST_METHOD");
-    rb_str_server_protocol = rb_interned_str_cstr("SERVER_PROTOCOL");
-    rb_str_path_info = rb_interned_str_cstr("PATH_INFO");
-    rb_str_query_string = rb_interned_str_cstr("QUERY_STRING");
-    rb_str_request_uri = rb_interned_str_cstr("REQUEST_URI");
-    rb_str_script_name = rb_interned_str_cstr("SCRIPT_NAME");
-    rb_str_server_name = rb_interned_str_cstr("SERVER_NAME");
-    rb_str_server_port = rb_interned_str_cstr("SERVER_PORT");
-    rb_str_empty = rb_interned_str_cstr("");
-    rb_str_http_1_0 = rb_interned_str_cstr("HTTP/1.0");
-    rb_str_http_1_1 = rb_interned_str_cstr("HTTP/1.1");
 
-    // Prevent garbage collection of constants
-    rb_gc_register_address(&rb_str_request_method);
-    rb_gc_register_address(&rb_str_server_protocol);
-    rb_gc_register_address(&rb_str_path_info);
-    rb_gc_register_address(&rb_str_query_string);
-    rb_gc_register_address(&rb_str_request_uri);
-    rb_gc_register_address(&rb_str_script_name);
-    rb_gc_register_address(&rb_str_server_name);
-    rb_gc_register_address(&rb_str_server_port);
-    rb_gc_register_address(&rb_str_empty);
-    rb_gc_register_address(&rb_str_http_1_0);
-    rb_gc_register_address(&rb_str_http_1_1);
+    rb_str_request_method = register_interned_string("REQUEST_METHOD");
+    rb_str_server_protocol = register_interned_string("SERVER_PROTOCOL");
+    rb_str_path_info = register_interned_string("PATH_INFO");
+    rb_str_query_string = register_interned_string("QUERY_STRING");
+    rb_str_request_uri = register_interned_string("REQUEST_URI");
+    rb_str_script_name = register_interned_string("SCRIPT_NAME");
+    rb_str_server_name = register_interned_string("SERVER_NAME");
+    rb_str_server_port = register_interned_string("SERVER_PORT");
+    rb_str_empty = register_interned_string("");
+    rb_str_http_1_0 = register_interned_string("HTTP/1.0");
+    rb_str_http_1_1 = register_interned_string("HTTP/1.1");
 }

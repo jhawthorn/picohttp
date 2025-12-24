@@ -7,22 +7,32 @@ class TestPicohttpEnv < Minitest::Test
     request = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
     env = Picohttp.parse_request_env(request)
 
-    assert_equal "GET", env["REQUEST_METHOD"]
-    assert_equal "HTTP/1.1", env["SERVER_PROTOCOL"]
-    assert_equal "/", env["PATH_INFO"]
-    assert_equal "", env["QUERY_STRING"]
-    assert_equal "example.com", env["HTTP_HOST"]
+    assert_equal({
+      "REQUEST_METHOD" => "GET",
+      "SERVER_PROTOCOL" => "HTTP/1.1",
+      "PATH_INFO" => "/",
+      "QUERY_STRING" => "",
+      "REQUEST_URI" => "/",
+      "SCRIPT_NAME" => "",
+      "HTTP_HOST" => "example.com",
+      "SERVER_NAME" => "example.com",
+    }, env)
   end
 
   def test_parse_request_env_with_query_string
     request = "GET /hello?name=world&foo=bar HTTP/1.0\r\nHost: localhost\r\n\r\n"
     env = Picohttp.parse_request_env(request)
 
-    assert_equal "GET", env["REQUEST_METHOD"]
-    assert_equal "HTTP/1.0", env["SERVER_PROTOCOL"]
-    assert_equal "/hello", env["PATH_INFO"]
-    assert_equal "name=world&foo=bar", env["QUERY_STRING"]
-    assert_equal "localhost", env["HTTP_HOST"]
+    assert_equal({
+      "REQUEST_METHOD" => "GET",
+      "SERVER_PROTOCOL" => "HTTP/1.0",
+      "PATH_INFO" => "/hello",
+      "QUERY_STRING" => "name=world&foo=bar",
+      "REQUEST_URI" => "/hello?name=world&foo=bar",
+      "SCRIPT_NAME" => "",
+      "HTTP_HOST" => "localhost",
+      "SERVER_NAME" => "localhost",
+    }, env)
   end
 
   def test_parse_request_env_header_name_transformation
@@ -139,6 +149,64 @@ class TestPicohttpEnv < Minitest::Test
       Picohttp.parse_request_env(request)
     end
     assert_equal "Invalid HTTP request", error.message
+  end
+
+  def test_parse_request_env_request_uri
+    request = "GET /path?foo=bar HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    env = Picohttp.parse_request_env(request)
+
+    assert_equal "/path?foo=bar", env["REQUEST_URI"]
+    assert_equal "/path", env["PATH_INFO"]
+    assert_equal "foo=bar", env["QUERY_STRING"]
+  end
+
+  def test_parse_request_env_script_name
+    request = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    env = Picohttp.parse_request_env(request)
+
+    assert_equal "", env["SCRIPT_NAME"]
+  end
+
+  def test_parse_request_env_server_name_and_port
+    request = "GET / HTTP/1.1\r\nHost: localhost:3000\r\n\r\n"
+    env = Picohttp.parse_request_env(request)
+
+    assert_equal({
+      "REQUEST_METHOD" => "GET",
+      "SERVER_PROTOCOL" => "HTTP/1.1",
+      "PATH_INFO" => "/",
+      "QUERY_STRING" => "",
+      "REQUEST_URI" => "/",
+      "SCRIPT_NAME" => "",
+      "HTTP_HOST" => "localhost:3000",
+      "SERVER_NAME" => "localhost",
+      "SERVER_PORT" => "3000",
+    }, env)
+  end
+
+  def test_parse_request_env_server_name_without_port
+    request = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    env = Picohttp.parse_request_env(request)
+
+    assert_equal "example.com", env["SERVER_NAME"]
+    assert_nil env["SERVER_PORT"]
+  end
+
+  def test_parse_request_env_host_case_insensitive
+    request = "GET / HTTP/1.1\r\nhost: localhost:8080\r\n\r\n"
+    env = Picohttp.parse_request_env(request)
+
+    assert_equal({
+      "REQUEST_METHOD" => "GET",
+      "SERVER_PROTOCOL" => "HTTP/1.1",
+      "PATH_INFO" => "/",
+      "QUERY_STRING" => "",
+      "REQUEST_URI" => "/",
+      "SCRIPT_NAME" => "",
+      "HTTP_HOST" => "localhost:8080",
+      "SERVER_NAME" => "localhost",
+      "SERVER_PORT" => "8080",
+    }, env)
   end
 
   def test_parse_request_env_header_count_range

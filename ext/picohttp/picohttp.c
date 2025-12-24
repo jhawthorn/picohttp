@@ -12,6 +12,10 @@ static VALUE rb_str_request_method;
 static VALUE rb_str_server_protocol;
 static VALUE rb_str_path_info;
 static VALUE rb_str_query_string;
+static VALUE rb_str_request_uri;
+static VALUE rb_str_script_name;
+static VALUE rb_str_server_name;
+static VALUE rb_str_server_port;
 static VALUE rb_str_empty;
 static VALUE rb_str_http_1_0;
 static VALUE rb_str_http_1_1;
@@ -161,6 +165,14 @@ picohttp_parse_request_env(VALUE self, VALUE str)
         header_values[idx++] = rb_str_empty;
     }
 
+    // REQUEST_URI is the full path including query string
+    header_values[idx++] = rb_str_request_uri;
+    header_values[idx++] = rb_str_new(path, path_len);
+
+    // SCRIPT_NAME is always empty
+    header_values[idx++] = rb_str_script_name;
+    header_values[idx++] = rb_str_empty;
+
     // Convert headers to HTTP_ prefixed environment variables
     for (size_t i = 0; i < num_headers; i++) {
         if (headers[i].name == NULL) {
@@ -169,6 +181,27 @@ picohttp_parse_request_env(VALUE self, VALUE str)
 
         header_values[idx++] = header_name_to_env_key(headers[i].name, headers[i].name_len);
         header_values[idx++] = rb_str_new(headers[i].value, headers[i].value_len);
+
+        // Extract SERVER_NAME/SERVER_PORT from Host header
+        if (headers[i].name_len == 4 &&
+            (headers[i].name[0] | 0x20) == 'h' &&
+            (headers[i].name[1] | 0x20) == 'o' &&
+            (headers[i].name[2] | 0x20) == 's' &&
+            (headers[i].name[3] | 0x20) == 't') {
+            const char *host = headers[i].value;
+            size_t host_len = headers[i].value_len;
+            const char *colon = memchr(host, ':', host_len);
+
+            if (colon) {
+                header_values[idx++] = rb_str_server_name;
+                header_values[idx++] = rb_str_new(host, colon - host);
+                header_values[idx++] = rb_str_server_port;
+                header_values[idx++] = rb_str_new(colon + 1, host_len - (colon - host) - 1);
+            } else {
+                header_values[idx++] = rb_str_server_name;
+                header_values[idx++] = rb_str_new(host, host_len);
+            }
+        }
     }
 
 #ifdef HAVE_RB_HASH_NEW_CAPA
@@ -200,6 +233,10 @@ Init_picohttp(void)
     rb_str_server_protocol = rb_interned_str_cstr("SERVER_PROTOCOL");
     rb_str_path_info = rb_interned_str_cstr("PATH_INFO");
     rb_str_query_string = rb_interned_str_cstr("QUERY_STRING");
+    rb_str_request_uri = rb_interned_str_cstr("REQUEST_URI");
+    rb_str_script_name = rb_interned_str_cstr("SCRIPT_NAME");
+    rb_str_server_name = rb_interned_str_cstr("SERVER_NAME");
+    rb_str_server_port = rb_interned_str_cstr("SERVER_PORT");
     rb_str_empty = rb_interned_str_cstr("");
     rb_str_http_1_0 = rb_interned_str_cstr("HTTP/1.0");
     rb_str_http_1_1 = rb_interned_str_cstr("HTTP/1.1");
@@ -209,6 +246,10 @@ Init_picohttp(void)
     rb_gc_register_address(&rb_str_server_protocol);
     rb_gc_register_address(&rb_str_path_info);
     rb_gc_register_address(&rb_str_query_string);
+    rb_gc_register_address(&rb_str_request_uri);
+    rb_gc_register_address(&rb_str_script_name);
+    rb_gc_register_address(&rb_str_server_name);
+    rb_gc_register_address(&rb_str_server_port);
     rb_gc_register_address(&rb_str_empty);
     rb_gc_register_address(&rb_str_http_1_0);
     rb_gc_register_address(&rb_str_http_1_1);

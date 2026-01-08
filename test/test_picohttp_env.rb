@@ -114,12 +114,38 @@ class TestPicohttpEnv < Minitest::Test
     assert_equal "limit=10&offset=20", env["QUERY_STRING"]
   end
 
-  def test_parse_request_env_header_case_preservation
-    request = "GET / HTTP/1.1\r\nHost: example.com\r\nHOST: other.com\r\n\r\n"
+  def test_parse_request_env_duplicate_headers_combined
+    request = "GET / HTTP/1.1\r\nHost: example.com\r\nAccept: text/html\r\nAccept: application/json\r\n\r\n"
     env = Picohttp.parse_request_env(request)
 
-    # Both should be converted to HTTP_HOST, last one wins
-    assert_equal "other.com", env["HTTP_HOST"]
+    assert_equal({
+      "REQUEST_METHOD" => "GET",
+      "SERVER_PROTOCOL" => "HTTP/1.1",
+      "PATH_INFO" => "/",
+      "QUERY_STRING" => "",
+      "REQUEST_URI" => "/",
+      "SCRIPT_NAME" => "",
+      "HTTP_HOST" => "example.com",
+      "SERVER_NAME" => "example.com",
+      "HTTP_ACCEPT" => "text/html, application/json",
+    }, env)
+  end
+
+  def test_parse_request_env_duplicate_headers_case_insensitive
+    request = "GET / HTTP/1.1\r\nHost: example.com\r\nX-Foo: bar\r\nx-foo: baz\r\n\r\n"
+    env = Picohttp.parse_request_env(request)
+
+    assert_equal({
+      "REQUEST_METHOD" => "GET",
+      "SERVER_PROTOCOL" => "HTTP/1.1",
+      "PATH_INFO" => "/",
+      "QUERY_STRING" => "",
+      "REQUEST_URI" => "/",
+      "SCRIPT_NAME" => "",
+      "HTTP_HOST" => "example.com",
+      "SERVER_NAME" => "example.com",
+      "HTTP_X_FOO" => "bar, baz",
+    }, env)
   end
 
   def test_parse_request_env_special_characters_in_headers

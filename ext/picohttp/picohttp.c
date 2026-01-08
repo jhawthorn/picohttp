@@ -115,6 +115,24 @@ picohttp_parse_request(VALUE self, VALUE str)
 }
 
 static VALUE
+build_hash_with_combined_duplicates(VALUE *header_values, int count)
+{
+    VALUE env = rb_hash_new();
+    for (int i = 0; i < count; i += 2) {
+        VALUE key = header_values[i];
+        VALUE val = header_values[i + 1];
+        VALUE existing = rb_hash_aref(env, key);
+        if (existing == Qnil) {
+            rb_hash_aset(env, key, val);
+        } else {
+            rb_str_cat2(existing, ", ");
+            rb_str_cat(existing, RSTRING_PTR(val), RSTRING_LEN(val));
+        }
+    }
+    return env;
+}
+
+static VALUE
 picohttp_parse_request_env(VALUE self, VALUE str)
 {
     Check_Type(str, T_STRING);
@@ -212,6 +230,11 @@ picohttp_parse_request_env(VALUE self, VALUE str)
 #endif
 
     rb_hash_bulk_insert(idx, header_values, env);
+
+    // Handle duplicate headers per RFC 7230
+    if (RHASH_SIZE(env) != (size_t)(idx / 2)) {
+        return build_hash_with_combined_duplicates(header_values, idx);
+    }
 
     return env;
 }

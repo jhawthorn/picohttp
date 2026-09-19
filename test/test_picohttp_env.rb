@@ -255,4 +255,78 @@ class TestPicohttpEnv < Minitest::Test
       end
     end
   end
+
+  TEMPLATE = {
+    "rack.url_scheme" => "http",
+    "rack.multithread" => false,
+    "SERVER_SOFTWARE" => "Test/1.0",
+  }.freeze
+
+  def test_parse_request_env_with_template
+    request = "GET /path?foo=bar HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    env = Picohttp.parse_request_env_with_template(request, TEMPLATE)
+
+    assert_equal TEMPLATE.merge(Picohttp.parse_request_env(request)), env
+    refute_predicate env, :frozen?
+    assert_equal 3, TEMPLATE.size
+  end
+
+  def test_parse_request_env_with_template_request_wins
+    request = "GET /path?foo=bar HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    template = { "QUERY_STRING" => "default", "SERVER_PORT" => "80" }
+    env = Picohttp.parse_request_env_with_template(request, template)
+
+    assert_equal "foo=bar", env["QUERY_STRING"]
+    assert_equal "80", env["SERVER_PORT"]
+    assert_equal({ "QUERY_STRING" => "default", "SERVER_PORT" => "80" }, template)
+  end
+
+  def test_parse_request_env_with_template_duplicate_headers_combined
+    request = "GET / HTTP/1.1\r\nHost: example.com\r\nAccept: text/html\r\nAccept: application/json\r\n\r\n"
+    env = Picohttp.parse_request_env_with_template(request, TEMPLATE)
+
+    assert_equal TEMPLATE.merge(Picohttp.parse_request_env(request)), env
+    assert_equal "text/html, application/json", env["HTTP_ACCEPT"]
+  end
+
+  def test_parse_request_env_with_template_overlap_and_duplicate_headers
+    request = "GET /?a=b HTTP/1.1\r\nHost: example.com\r\nAccept: text/html\r\nAccept: application/json\r\n\r\n"
+    template = { "QUERY_STRING" => "default", "HTTP_ACCEPT" => "default", "rack.url_scheme" => "http" }.freeze
+    env = Picohttp.parse_request_env_with_template(request, template)
+
+    assert_equal template.merge(Picohttp.parse_request_env(request)), env
+    assert_equal "a=b", env["QUERY_STRING"]
+    assert_equal "text/html, application/json", env["HTTP_ACCEPT"]
+    assert_equal "http", env["rack.url_scheme"]
+    assert_equal "default", template["HTTP_ACCEPT"]
+  end
+
+  def test_parse_request_env_with_template_incomplete_request
+    assert_nil Picohttp.parse_request_env_with_template("GET / HTTP/1.1\r\nHost: exam", TEMPLATE)
+  end
+
+  def test_parse_request_env_with_template_malformed_request
+    assert_raises(Picohttp::ParseError) do
+      Picohttp.parse_request_env_with_template("INVALID REQUEST\r\n\r\n", TEMPLATE)
+    end
+  end
+
+  def test_parse_request_env_with_template_requires_hash
+    assert_raises(TypeError) do
+      Picohttp.parse_request_env_with_template("GET / HTTP/1.1\r\n\r\n", nil)
+    end
+  end
+
+  def test_parse_request_env_with_template_header_count_range
+    template = 20.times.to_h { |i| ["template.#{i}", i] }.freeze
+
+    (0...100).each do |num_headers|
+      headers_str = "Host: localhost:3000\r\n"
+      headers_str += num_headers.times.map { |i| "X-Header-#{i}: value#{i}\r\n" }.join
+      request = "GET / HTTP/1.1\r\n#{headers_str}\r\n"
+
+      env = Picohttp.parse_request_env_with_template(request, template)
+      assert_equal template.merge(Picohttp.parse_request_env(request)), env
+    end
+  end
 end

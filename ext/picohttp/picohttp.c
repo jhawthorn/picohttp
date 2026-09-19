@@ -132,8 +132,8 @@ build_hash_with_combined_duplicates(VALUE *header_values, int count)
     return env;
 }
 
-static VALUE
-picohttp_parse_request_env(VALUE self, VALUE str)
+static int
+parse_request_env_pairs(VALUE str, VALUE *header_values)
 {
     Check_Type(str, T_STRING);
 
@@ -150,12 +150,11 @@ picohttp_parse_request_env(VALUE self, VALUE str)
 
     if (result < 0) {
         if (result == -2) {
-            return Qnil; // Incomplete request
+            return -1; // Incomplete request
         }
         rb_raise(rb_ePicohttpParseError, "Invalid HTTP request");
     }
 
-    VALUE header_values[(MAX_HTTP_HEADERS + EXTRA_RACK_HEADERS) * 2];
     int idx = 0;
 
     // Standard CGI/Rack environment variables
@@ -223,8 +222,19 @@ picohttp_parse_request_env(VALUE self, VALUE str)
         }
     }
 
+    return idx;
+}
+
+static VALUE
+picohttp_parse_request_env(VALUE self, VALUE str)
+{
+    VALUE header_values[(MAX_HTTP_HEADERS + EXTRA_RACK_HEADERS) * 2];
+    int idx = parse_request_env_pairs(str, header_values);
+    if (idx < 0) return Qnil;
+
 #ifdef HAVE_RB_HASH_NEW_CAPA
-    VALUE env = rb_hash_new_capa(idx / 2);
+    // Extra slack so servers can add their own env keys without a rehash
+    VALUE env = rb_hash_new_capa(idx / 2 + 8);
 #else
     VALUE env = rb_hash_new();
 #endif
@@ -234,6 +244,29 @@ picohttp_parse_request_env(VALUE self, VALUE str)
     // Handle duplicate headers per RFC 7230
     if (RHASH_SIZE(env) != (size_t)(idx / 2)) {
         return build_hash_with_combined_duplicates(header_values, idx);
+    }
+
+    return env;
+}
+
+static VALUE
+picohttp_parse_request_env_with_template(VALUE self, VALUE str, VALUE template)
+{
+    Check_Type(template, T_HASH);
+
+    VALUE header_values[(MAX_HTTP_HEADERS + EXTRA_RACK_HEADERS) * 2];
+    int idx = parse_request_env_pairs(str, header_values);
+    if (idx < 0) return Qnil;
+
+    VALUE env = rb_hash_dup(template);
+    size_t expected_size = RHASH_SIZE(env) + idx / 2;
+
+    rb_hash_bulk_insert(idx, header_values, env);
+
+    // Handle duplicate headers per RFC 7230
+    if (RHASH_SIZE(env) != expected_size) {
+        env = rb_hash_dup(template);
+        rb_hash_update_by(env, build_hash_with_combined_duplicates(header_values, idx), NULL);
     }
 
     return env;
@@ -258,6 +291,7 @@ Init_picohttp(void)
     rb_ePicohttpParseError = rb_define_class_under(rb_mPicohttp, "ParseError", rb_eStandardError);
     rb_define_module_function(rb_mPicohttp, "parse_request", picohttp_parse_request, 1);
     rb_define_module_function(rb_mPicohttp, "parse_request_env", picohttp_parse_request_env, 1);
+    rb_define_module_function(rb_mPicohttp, "parse_request_env_with_template", picohttp_parse_request_env_with_template, 2);
 
     // Initialize interned string constants
     init_string_lookup();

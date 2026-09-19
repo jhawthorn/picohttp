@@ -34,6 +34,27 @@ env = Picohttp.parse_request_env(request)
 
 Returns `nil` for incomplete requests, raises `Picohttp::ParseError` for invalid ones.
 
+### Starting from a template
+
+Servers usually add the same constant keys to every env. `parse_request_env_with_template` starts from a copy of a template hash instead, which is faster than merging the constants in afterwards:
+
+```ruby
+RACK_ENV_CONST = {
+  "rack.url_scheme" => "http",
+  "SERVER_SOFTWARE" => "MyServer/1.0",
+}.freeze
+
+env = Picohttp.parse_request_env_with_template(request, RACK_ENV_CONST)
+# => {
+#      "rack.url_scheme" => "http",
+#      "SERVER_SOFTWARE" => "MyServer/1.0",
+#      "REQUEST_METHOD" => "GET",
+#      ...
+#    }
+```
+
+The template is never modified and may be frozen. If a key is in both the template and the request, the request wins, but this isn't recommended.
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake test` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.

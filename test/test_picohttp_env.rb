@@ -235,6 +235,17 @@ class TestPicohttpEnv < Minitest::Test
     }, env)
   end
 
+  def test_parse_request_env_duplicate_host_raises
+    # More than one Host is a 400 (RFC 7230 5.4). Previously the per-Host
+    # SERVER_NAME/SERVER_PORT extras overflowed the env pair buffer and crashed.
+    request = "GET / HTTP/1.1\r\n" + ("Host: example.com:80\r\n" * 50) + "\r\n"
+
+    error = assert_raises(Picohttp::ParseError) do
+      Picohttp.parse_request_env(request)
+    end
+    assert_equal "Duplicate Host header", error.message
+  end
+
   def test_parse_request_env_header_count_range
     (0..200).each do |num_headers|
       headers_str = "Host: localhost:3000\r\n"

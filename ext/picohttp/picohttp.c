@@ -192,6 +192,7 @@ parse_request_env_pairs(VALUE str, VALUE *header_values)
     header_values[idx++] = rb_str_empty;
 
     // Convert headers to HTTP_ prefixed environment variables
+    int host_seen = 0;
     for (size_t i = 0; i < num_headers; i++) {
         if (headers[i].name == NULL) {
             rb_raise(rb_ePicohttpParseError, "HTTP line folding not supported");
@@ -200,12 +201,18 @@ parse_request_env_pairs(VALUE str, VALUE *header_values)
         header_values[idx++] = header_name_to_env_key(headers[i].name, headers[i].name_len);
         header_values[idx++] = rb_str_new(headers[i].value, headers[i].value_len);
 
-        // Extract SERVER_NAME/SERVER_PORT from Host header
         if (headers[i].name_len == 4 &&
             (headers[i].name[0] | 0x20) == 'h' &&
             (headers[i].name[1] | 0x20) == 'o' &&
             (headers[i].name[2] | 0x20) == 's' &&
             (headers[i].name[3] | 0x20) == 't') {
+            // More than one Host is a 400 (RFC 7230 5.4). Rejecting also keeps
+            // idx bounded: the SERVER_* extras are written at most once.
+            if (host_seen) {
+                rb_raise(rb_ePicohttpParseError, "Duplicate Host header");
+            }
+            host_seen = 1;
+
             const char *host = headers[i].value;
             size_t host_len = headers[i].value_len;
             const char *colon = memchr(host, ':', host_len);

@@ -218,6 +218,23 @@ class TestPicohttpEnv < Minitest::Test
     assert_nil env["SERVER_PORT"]
   end
 
+  def test_parse_request_env_server_name_ipv6_with_port
+    request = "GET / HTTP/1.1\r\nHost: [::1]:8080\r\n\r\n"
+    env = Picohttp.parse_request_env(request)
+
+    # SERVER_NAME keeps the brackets so it stays a usable authority host.
+    assert_equal "[::1]", env["SERVER_NAME"]
+    assert_equal "8080", env["SERVER_PORT"]
+  end
+
+  def test_parse_request_env_server_name_ipv6_without_port
+    request = "GET / HTTP/1.1\r\nHost: [2001:db8::1]\r\n\r\n"
+    env = Picohttp.parse_request_env(request)
+
+    assert_equal "[2001:db8::1]", env["SERVER_NAME"]
+    assert_nil env["SERVER_PORT"]
+  end
+
   def test_parse_request_env_host_case_insensitive
     request = "GET / HTTP/1.1\r\nhost: localhost:8080\r\n\r\n"
     env = Picohttp.parse_request_env(request)

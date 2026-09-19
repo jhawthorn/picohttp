@@ -215,13 +215,23 @@ parse_request_env_pairs(VALUE str, VALUE *header_values)
 
             const char *host = headers[i].value;
             size_t host_len = headers[i].value_len;
-            const char *colon = memchr(host, ':', host_len);
+            const char *host_end = host + host_len;
+
+            // IPv6 authority is "[::1]" or "[::1]:port"; the colons inside the
+            // brackets aren't the port separator, so scan only after the ']'.
+            const char *colon;
+            if (host_len > 0 && host[0] == '[') {
+                const char *bracket = memchr(host, ']', host_len);
+                colon = bracket ? memchr(bracket, ':', host_end - bracket) : NULL;
+            } else {
+                colon = memchr(host, ':', host_len);
+            }
 
             if (colon) {
                 header_values[idx++] = rb_str_server_name;
                 header_values[idx++] = rb_str_new(host, colon - host);
                 header_values[idx++] = rb_str_server_port;
-                header_values[idx++] = rb_str_new(colon + 1, host_len - (colon - host) - 1);
+                header_values[idx++] = rb_str_new(colon + 1, host_end - colon - 1);
             } else {
                 header_values[idx++] = rb_str_server_name;
                 header_values[idx++] = rb_str_new(host, host_len);

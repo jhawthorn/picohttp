@@ -239,6 +239,12 @@ parse_request_env_pairs(VALUE str, VALUE *header_values)
         }
     }
 
+    // An HTTP/1.1 request without a Host is a 400 too (RFC 7230 5.4).
+    // HTTP/1.0 doesn't require one.
+    if (!host_seen && minor_version >= 1) {
+        rb_raise(rb_ePicohttpParseError, "Missing Host header");
+    }
+
     return idx;
 }
 

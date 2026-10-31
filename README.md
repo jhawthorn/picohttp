@@ -53,8 +53,8 @@ The produced hash uses CGI/Rack-style keys:
 
 Every other request header becomes an `HTTP_`-prefixed key: the name is
 uppercased and `-` becomes `_` (e.g. `User-Agent` → `HTTP_USER_AGENT`). Repeated
-headers are joined with `, `. A repeated `Host` header raises
-`Picohttp::ParseError` (RFC 7230 §5.4).
+headers are joined with `, `. A repeated `Host` header, or an HTTP/1.1 request
+without one, raises `Picohttp::ParseError` (RFC 7230 §5.4).
 
 ### Starting from a template
 

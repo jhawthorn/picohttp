@@ -36,7 +36,7 @@ class TestPicohttpEnv < Minitest::Test
   end
 
   def test_parse_request_env_header_name_transformation
-    request = "POST /api HTTP/1.1\r\nContent-Type: application/json\r\nX-Custom-Header: test\r\naccept-encoding: gzip\r\n\r\n"
+    request = "POST /api HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nX-Custom-Header: test\r\naccept-encoding: gzip\r\n\r\n"
     env = Picohttp.parse_request_env(request)
 
     assert_equal "POST", env["REQUEST_METHOD"]
@@ -149,7 +149,7 @@ class TestPicohttpEnv < Minitest::Test
   end
 
   def test_parse_request_env_special_characters_in_headers
-    request = "GET / HTTP/1.1\r\nX-Test-123: value with spaces\r\nX_Under_Score: underscore\r\n\r\n"
+    request = "GET / HTTP/1.1\r\nHost: localhost\r\nX-Test-123: value with spaces\r\nX_Under_Score: underscore\r\n\r\n"
     env = Picohttp.parse_request_env(request)
 
     assert_equal "value with spaces", env["HTTP_X_TEST_123"]
@@ -261,6 +261,39 @@ class TestPicohttpEnv < Minitest::Test
       Picohttp.parse_request_env(request)
     end
     assert_equal "Duplicate Host header", error.message
+  end
+
+  def test_parse_request_env_missing_host_raises_for_http_1_1
+    # HTTP/1.1 requires a Host, and a request without one is a 400 too
+    # (RFC 7230 5.4).
+    error = assert_raises(Picohttp::ParseError) do
+      Picohttp.parse_request_env("GET / HTTP/1.1\r\nAccept: */*\r\n\r\n")
+    end
+    assert_equal "Missing Host header", error.message
+
+    assert_raises(Picohttp::ParseError) do
+      Picohttp.parse_request_env_with_template("GET / HTTP/1.1\r\n\r\n", {})
+    end
+  end
+
+  def test_parse_request_env_missing_host_allowed_for_http_1_0
+    env = Picohttp.parse_request_env("GET / HTTP/1.0\r\n\r\n")
+
+    assert_equal "HTTP/1.0", env["SERVER_PROTOCOL"]
+    refute env.key?("HTTP_HOST")
+    refute env.key?("SERVER_NAME")
+  end
+
+  def test_parse_request_env_empty_host_allowed
+    env = Picohttp.parse_request_env("GET / HTTP/1.1\r\nHost:\r\n\r\n")
+
+    assert_equal "", env["HTTP_HOST"]
+    assert_equal "", env["SERVER_NAME"]
+  end
+
+  def test_parse_request_env_incomplete_request_without_host_yet
+    # The Host may still be on its way.
+    assert_nil Picohttp.parse_request_env("GET / HTTP/1.1\r\nAccept: */*\r\n")
   end
 
   def test_parse_request_env_header_count_range
